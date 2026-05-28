@@ -118,7 +118,7 @@ async function run() {
 
         // Get all requests (admin/volunteer) with filter + pagination
         app.get("/donation-requests", async (req, res) => {
-            const { status, page = 1, limit = 5 } = req.query;
+            const { status, page = 1, limit = 10 } = req.query;
             const query = status ? { status } : {};
             const skip = (parseInt(page) - 1) * parseInt(limit);
             const total = await donationRequestsCollection.countDocuments(query);
