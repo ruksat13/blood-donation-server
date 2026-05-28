@@ -120,6 +120,7 @@ async function run() {
         app.get("/donation-requests/pending", async (req, res) => {
             const requests = await donationRequestsCollection
                 .find({ status: "pending" })
+                .sort({ _id: -1 })
                 .toArray();
             res.send(requests);
         });
