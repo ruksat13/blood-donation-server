@@ -66,6 +66,14 @@ async function run() {
             res.send(donors);
         });
 
+        // Get single user by email
+        app.get("/users/:email", async (req, res) => {
+            const email = req.params.email;
+            const user = await usersCollection.findOne({ email });
+            res.send(user);
+        });
+
+
         // Update user profile
         app.patch("/users/:email", async (req, res) => {
             const email = req.params.email;
