@@ -223,7 +223,7 @@ async function run() {
         });
 
         app.get("/fundings", async (req, res) => {
-            const fundings = await fundingsCollection.find().toArray();
+            const fundings = await fundingsCollection.find().sort({ _id: -1 }).toArray();
             res.send(fundings);
         });
 
