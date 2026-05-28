@@ -196,6 +196,14 @@ async function run() {
 
         // ==================== ADMIN STATS ====================
 
+        // Get donation requests count by status
+        app.get("/donation-requests/stats/count", async (req, res) => {
+            const pending = await donationRequestsCollection.countDocuments({ status: "pending" });
+            const inprogress = await donationRequestsCollection.countDocuments({ status: "inprogress" });
+            const done = await donationRequestsCollection.countDocuments({ status: "done" });
+            const canceled = await donationRequestsCollection.countDocuments({ status: "canceled" });
+            res.send({ pending, inprogress, done, canceled });
+        });
         app.get("/admin/stats", async (req, res) => {
             const totalUsers = await usersCollection.countDocuments({ role: "donor" });
             const totalRequests = await donationRequestsCollection.countDocuments();
