@@ -216,9 +216,12 @@ async function run() {
         });
 
         // ==================== ROOT ====================
-
         app.get("/", (req, res) => {
-            res.send("BloodBridge Server is running!");
+            res.json({
+                status: "success",
+                message: "BloodBridge Server is running!",
+                version: "1.0.0"
+            });
         });
 
         app.listen(port, () => {
