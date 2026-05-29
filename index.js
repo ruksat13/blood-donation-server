@@ -4,6 +4,50 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
+const jwt = require("jsonwebtoken");
+
+// JWT Middleware
+const verifyToken = (req, res, next) => {
+    const authorization = req.headers.authorization;
+    if (!authorization) {
+        return res.status(401).send({ message: "Unauthorized access" });
+    }
+    const token = authorization.split(" ")[1];
+    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+        if (err) {
+            return res.status(401).send({ message: "Unauthorized access" });
+        }
+        req.decoded = decoded;
+        next();
+    });
+};
+
+// JWT Middleware
+const verifyToken = (req, res, next) => {
+    const authorization = req.headers.authorization;
+    if (!authorization) {
+        return res.status(401).send({ message: "Unauthorized access" });
+    }
+    const token = authorization.split(" ")[1];
+    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+        if (err) {
+            return res.status(401).send({ message: "Unauthorized access" });
+        }
+        req.decoded = decoded;
+        next();
+    });
+};
+
+// Verify Admin
+const verifyAdmin = async (req, res, next) => {
+    const email = req.decoded.email;
+    const user = await usersCollection.findOne({ email });
+    if (user?.role !== "admin") {
+        return res.status(403).send({ message: "Forbidden access" });
+    }
+    next();
+};
+
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -29,9 +73,27 @@ async function run() {
         const db = client.db("blood-donation");
 
         const usersCollection = db.collection("users");
+        // Verify Admin middleware (inside run)
+        const verifyAdmin = async (req, res, next) => {
+            const email = req.decoded.email;
+            const user = await usersCollection.findOne({ email });
+            if (user?.role !== "admin") {
+                return res.status(403).send({ message: "Forbidden access" });
+            }
+            next();
+        };
+
         const donationRequestsCollection = db.collection("donationRequests");
         const fundingsCollection = db.collection("fundings");
 
+        // ==================== JWT ====================
+
+        // Generate JWT token
+        app.post("/jwt", (req, res) => {
+            const user = req.body;
+            const token = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: "7d" });
+            res.send({ token });
+        });
         // ==================== USERS ====================
 
         // Save user
@@ -51,7 +113,7 @@ async function run() {
         });
 
         // Get all users with filter
-        app.get("/users", async (req, res) => {
+        app.get("/users", verifyToken, async (req, res) => {
             const { status } = req.query;
             const query = status ? { status } : {};
             const users = await usersCollection.find(query).toArray();
@@ -86,7 +148,7 @@ async function run() {
         });
 
         // Update user status
-        app.patch("/users/status/:email", async (req, res) => {
+        app.patch("/users/status/:email", verifyToken, async (req, res) => {
             const email = req.params.email;
             const { status } = req.body;
             const result = await usersCollection.updateOne(
@@ -97,7 +159,7 @@ async function run() {
         });
 
         // Update user role
-        app.patch("/users/role/:email", async (req, res) => {
+        app.patch("/users/role/:email", verifyToken, async (req, res) => {
             const email = req.params.email;
             const { role } = req.body;
             const result = await usersCollection.updateOne(
@@ -110,14 +172,14 @@ async function run() {
         // ==================== DONATION REQUESTS ====================
 
         // Create donation request
-        app.post("/donation-requests", async (req, res) => {
+        app.post("/donation-requests", verifyToken, async (req, res) => {
             const request = req.body;
             const result = await donationRequestsCollection.insertOne(request);
             res.send(result);
         });
 
         // Get all pending (public)
-        app.get("/donation-requests/pending", async (req, res) => {
+        app.get("/donation-requests", verifyToken, async (req, res) => {
             const requests = await donationRequestsCollection
                 .find({ status: "pending" })
                 .sort({ _id: -1 })
@@ -140,7 +202,7 @@ async function run() {
         });
 
         // Get user's own requests
-        app.get("/donation-requests/user/:email", async (req, res) => {
+        app.get("/donation-requests/user/:email", verifyToken, async (req, res) => {
             const email = req.params.email;
             const { status, page, limit } = req.query;
 
@@ -204,7 +266,7 @@ async function run() {
             const canceled = await donationRequestsCollection.countDocuments({ status: "canceled" });
             res.send({ pending, inprogress, done, canceled });
         });
-        app.get("/admin/stats", async (req, res) => {
+        app.get("/admin/stats", verifyToken, async (req, res) => {
             const totalUsers = await usersCollection.countDocuments({ role: "donor" });
             const totalRequests = await donationRequestsCollection.countDocuments();
             const fundingData = await fundingsCollection.find().toArray();
