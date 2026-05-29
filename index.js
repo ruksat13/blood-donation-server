@@ -3,50 +3,7 @@ const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
-
 const jwt = require("jsonwebtoken");
-
-// JWT Middleware
-const verifyToken = (req, res, next) => {
-    const authorization = req.headers.authorization;
-    if (!authorization) {
-        return next();
-    }
-    const token = authorization.split(" ")[1];
-    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-        if (err) {
-            return res.status(401).send({ message: "Unauthorized access" });
-        }
-        req.decoded = decoded;
-        next();
-    });
-};
-
-// JWT Middleware
-const verifyToken = (req, res, next) => {
-    const authorization = req.headers.authorization;
-    if (!authorization) {
-        return res.status(401).send({ message: "Unauthorized access" });
-    }
-    const token = authorization.split(" ")[1];
-    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-        if (err) {
-            return res.status(401).send({ message: "Unauthorized access" });
-        }
-        req.decoded = decoded;
-        next();
-    });
-};
-
-// Verify Admin
-const verifyAdmin = async (req, res, next) => {
-    const email = req.decoded.email;
-    const user = await usersCollection.findOne({ email });
-    if (user?.role !== "admin") {
-        return res.status(403).send({ message: "Forbidden access" });
-    }
-    next();
-};
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -58,6 +15,21 @@ app.use(cors({
     allowedHeaders: ["Content-Type", "Authorization"],
 }));
 app.use(express.json());
+
+// JWT Middleware
+const verifyToken = (req, res, next) => {
+    const authorization = req.headers.authorization;
+    if (!authorization) return next();
+    const token = authorization.split(" ")[1];
+    if (!token) return next();
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.decoded = decoded;
+        next();
+    } catch (err) {
+        return next();
+    }
+};
 
 const uri = process.env.MONGODB_URI;
 const client = new MongoClient(uri, {
@@ -74,9 +46,13 @@ async function run() {
         const db = client.db("blood-donation");
 
         const usersCollection = db.collection("users");
-        // Verify Admin middleware (inside run)
+        const donationRequestsCollection = db.collection("donationRequests");
+        const fundingsCollection = db.collection("fundings");
+
+        // Verify Admin middleware
         const verifyAdmin = async (req, res, next) => {
-            const email = req.decoded.email;
+            const email = req.decoded?.email;
+            if (!email) return res.status(403).send({ message: "Forbidden access" });
             const user = await usersCollection.findOne({ email });
             if (user?.role !== "admin") {
                 return res.status(403).send({ message: "Forbidden access" });
@@ -84,17 +60,14 @@ async function run() {
             next();
         };
 
-        const donationRequestsCollection = db.collection("donationRequests");
-        const fundingsCollection = db.collection("fundings");
-
         // ==================== JWT ====================
 
-        // Generate JWT token
         app.post("/jwt", (req, res) => {
             const user = req.body;
             const token = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: "7d" });
             res.send({ token });
         });
+
         // ==================== USERS ====================
 
         // Save user
@@ -113,14 +86,6 @@ async function run() {
             res.send({ role: user?.role || "donor" });
         });
 
-        // Get all users with filter
-        app.get("/users", verifyToken, async (req, res) => {
-            const { status } = req.query;
-            const query = status ? { status } : {};
-            const users = await usersCollection.find(query).toArray();
-            res.send(users);
-        });
-
         // Search donors
         app.get("/users/search", async (req, res) => {
             const { bloodGroup, district, upazila } = req.query;
@@ -129,13 +94,20 @@ async function run() {
             res.send(donors);
         });
 
+        // Get all users with filter
+        app.get("/users", verifyToken, async (req, res) => {
+            const { status } = req.query;
+            const query = status ? { status } : {};
+            const users = await usersCollection.find(query).toArray();
+            res.send(users);
+        });
+
         // Get single user by email
         app.get("/users/:email", async (req, res) => {
             const email = req.params.email;
             const user = await usersCollection.findOne({ email });
             res.send(user);
         });
-
 
         // Update user profile
         app.patch("/users/:email", async (req, res) => {
@@ -180,7 +152,7 @@ async function run() {
         });
 
         // Get all pending (public)
-        app.get("/donation-requests", verifyToken, async (req, res) => {
+        app.get("/donation-requests/pending", async (req, res) => {
             const requests = await donationRequestsCollection
                 .find({ status: "pending" })
                 .sort({ _id: -1 })
@@ -188,18 +160,13 @@ async function run() {
             res.send(requests);
         });
 
-        // Get all requests (admin/volunteer) with filter + pagination
-        app.get("/donation-requests", async (req, res) => {
-            const { status, page = 1, limit = 10 } = req.query;
-            const query = status ? { status } : {};
-            const skip = (parseInt(page) - 1) * parseInt(limit);
-            const total = await donationRequestsCollection.countDocuments(query);
-            const requests = await donationRequestsCollection
-                .find(query)
-                .skip(skip)
-                .limit(parseInt(limit))
-                .toArray();
-            res.send({ requests, totalPages: Math.ceil(total / parseInt(limit)) });
+        // Get donation requests count by status
+        app.get("/donation-requests/stats/count", async (req, res) => {
+            const pending = await donationRequestsCollection.countDocuments({ status: "pending" });
+            const inprogress = await donationRequestsCollection.countDocuments({ status: "inprogress" });
+            const done = await donationRequestsCollection.countDocuments({ status: "done" });
+            const canceled = await donationRequestsCollection.countDocuments({ status: "canceled" });
+            res.send({ pending, inprogress, done, canceled });
         });
 
         // Get user's own requests
@@ -219,13 +186,26 @@ async function run() {
                 return res.send({ requests, totalPages: Math.ceil(total / parseInt(limit)) });
             }
 
-            // For donor home (recent 3)
             const requests = await donationRequestsCollection
                 .find({ requesterEmail: email })
                 .sort({ _id: -1 })
                 .limit(3)
                 .toArray();
             res.send(requests);
+        });
+
+        // Get all requests with filter + pagination
+        app.get("/donation-requests", verifyToken, async (req, res) => {
+            const { status, page = 1, limit = 10 } = req.query;
+            const query = status ? { status } : {};
+            const skip = (parseInt(page) - 1) * parseInt(limit);
+            const total = await donationRequestsCollection.countDocuments(query);
+            const requests = await donationRequestsCollection
+                .find(query)
+                .skip(skip)
+                .limit(parseInt(limit))
+                .toArray();
+            res.send({ requests, totalPages: Math.ceil(total / parseInt(limit)) });
         });
 
         // Get single request
@@ -259,14 +239,6 @@ async function run() {
 
         // ==================== ADMIN STATS ====================
 
-        // Get donation requests count by status
-        app.get("/donation-requests/stats/count", async (req, res) => {
-            const pending = await donationRequestsCollection.countDocuments({ status: "pending" });
-            const inprogress = await donationRequestsCollection.countDocuments({ status: "inprogress" });
-            const done = await donationRequestsCollection.countDocuments({ status: "done" });
-            const canceled = await donationRequestsCollection.countDocuments({ status: "canceled" });
-            res.send({ pending, inprogress, done, canceled });
-        });
         app.get("/admin/stats", verifyToken, async (req, res) => {
             const totalUsers = await usersCollection.countDocuments({ role: "donor" });
             const totalRequests = await donationRequestsCollection.countDocuments();
@@ -299,13 +271,11 @@ async function run() {
         });
 
         // ==================== ROOT ====================
-        // Health check route
+
         app.get("/health", (req, res) => {
-            res.json({
-                status: "ok",
-                timestamp: new Date().toISOString()
-            });
+            res.json({ status: "ok", timestamp: new Date().toISOString() });
         });
+
         app.get("/", (req, res) => {
             res.json({
                 status: "success",
@@ -317,12 +287,15 @@ async function run() {
         app.listen(port, () => {
             console.log(`Server running on port ${port}`);
         });
+
     } catch (err) {
         console.error(err);
     }
 }
+
 app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(500).json({ message: "Internal Server Error" });
 });
+
 run();
