@@ -147,6 +147,10 @@ async function run() {
         // Create donation request
         app.post("/donation-requests", verifyToken, async (req, res) => {
             const request = req.body;
+            const user = await usersCollection.findOne({ email: request.requesterEmail });
+            if (user?.status === "blocked") {
+                return res.status(403).send({ message: "Blocked users cannot create donation requests" });
+            }
             const result = await donationRequestsCollection.insertOne(request);
             res.send(result);
         });
