@@ -244,7 +244,7 @@ async function run() {
         // ==================== ADMIN STATS ====================
 
         app.get("/admin/stats", verifyToken, async (req, res) => {
-            const totalUsers = await usersCollection.countDocuments({ role: "donor" });
+            const totalUsers = await usersCollection.countDocuments();
             const totalRequests = await donationRequestsCollection.countDocuments();
             const fundingData = await fundingsCollection.find().toArray();
             const totalFunding = fundingData.reduce((sum, f) => sum + f.amount, 0);
