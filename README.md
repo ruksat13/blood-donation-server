@@ -1,53 +1,55 @@
-# BloodBridge - Blood Donation Application
+# BloodBridge - Blood Donation Server
 
-## Project Purpose
-BloodBridge is a full-stack blood donation platform that connects blood donors with recipients. It facilitates seamless blood donation activities with role-based access control for Admin, Donor, and Volunteer.
+## Live Server URL
+🌐 https://blood-donation-server-rose.vercel.app
 
-## Live URL
-🌐 https://visionary-raindrop-12bd9e.netlify.app
-
-## Admin Credentials
-- **Email:** (set from MongoDB)
-- **Password:** (set from MongoDB)
-
-## Key Features
-- 🔐 Firebase Authentication (Email/Password)
-- 👤 Role-based Dashboard (Admin, Donor, Volunteer)
-- 🩸 Blood Donation Request Management
-- 🔍 Search Donors by Blood Group, District & Upazila
-- 💳 Stripe Payment Integration for Funding
-- 📊 Admin Statistics Dashboard
-- 🖼️ ImgBB Avatar Upload
-- 📱 Fully Responsive Design
+## Tech Stack
+- **Runtime:** Node.js
+- **Framework:** Express.js
+- **Database:** MongoDB Atlas
+- **Authentication:** JWT
+- **Payment:** Stripe
+- **Deployment:** Vercel
 
 ## NPM Packages Used
-
-### Client Side
-- react-router-dom
-- axios
-- firebase
-- react-hook-form
-- react-hot-toast
-- sweetalert2
-- @tanstack/react-query
-- react-icons
-- lucide-react
-- @stripe/stripe-js
-- @stripe/react-stripe-js
-- tailwindcss
-
-### Server Side
 - express
 - mongodb
 - cors
 - dotenv
 - stripe
+- jsonwebtoken
 - nodemon
 
-## Tech Stack
-- **Frontend:** React, Vite, Tailwind CSS
-- **Backend:** Node.js, Express.js
-- **Database:** MongoDB Atlas
-- **Authentication:** Firebase
-- **Payment:** Stripe
-- **Deployment:** Netlify (Client), Vercel (Server)
+## API Endpoints
+
+### Users
+- POST `/users` - Create user
+- GET `/users/role/:email` - Get user role
+- GET `/users/search` - Search donors
+- GET `/users` - Get all users
+- PATCH `/users/:email` - Update user profile
+- PATCH `/users/status/:email` - Update user status
+- PATCH `/users/role/:email` - Update user role
+
+### Donation Requests
+- POST `/donation-requests` - Create donation request
+- GET `/donation-requests/pending` - Get pending requests
+- GET `/donation-requests/user/:email` - Get user's requests
+- GET `/donation-requests` - Get all requests
+- GET `/donation-requests/:id` - Get single request
+- PATCH `/donation-requests/:id` - Update request
+- DELETE `/donation-requests/:id` - Delete request
+
+### Admin
+- GET `/admin/stats` - Get admin statistics
+
+### Funding
+- POST `/create-payment-intent` - Create Stripe payment intent
+- POST `/fundings` - Save funding
+- GET `/fundings` - Get all fundings
+
+## Environment Variables
+- `MONGODB_URI`
+- `STRIPE_SECRET_KEY`
+- `JWT_SECRET`
+- `PORT`
